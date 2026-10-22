@@ -1,11 +1,11 @@
 {
   "id": "area-documental",
   "name": "Area Documental",
-  "version": "0.1.1",
-  "apiVersion": 6,
+  "version": "0.2.0",
+  "apiVersion": 9,
   "entry": "plugin.js",
   "icon": "icon.png",
-  "description": "Más de 2.000 documentales en español de area-documental.com: recientes, más vistos, por año y de la A a la Z, con búsqueda y subtítulos.",
+  "description": "Más de 2.000 documentales en español de area-documental.com: sección propia, 24 temas, series con sus capítulos, búsqueda y subtítulos.",
   "author": "xuper-plugin",
   "homepage": "https://github.com/xuper-plugin/kino-plugin-areadocumental",
   "hosts": [
@@ -16,10 +16,56 @@
     "search",
     "home",
     "browse",
-    "resolve"
+    "episodes",
+    "resolve",
+    "scopedSearch",
+    "download"
   ],
   "categories": [
-    "movies"
+    "movies",
+    "series"
   ],
-  "color": "#0EA5A4"
+  "color": "#0EA5A4",
+  "section": {
+    "label": "Documentales",
+    "labelEn": "Documentaries"
+  },
+  "theme": {
+    "accent": "#0E7490",
+    "onAccent": "#FFFFFF",
+    "background": "#061A1D",
+    "surface": "#0D2B30",
+    "highlight": "#7DD3D8"
+  },
+  "settings": [
+    {
+      "key": "seriesSection",
+      "type": "section",
+      "label": "Series",
+      "labelEn": "Series",
+      "hint": "Muchos documentales son capítulos de una serie («Ep 4-6»). Agrupados salen como una serie con sus capítulos.",
+      "hintEn": "Many documentaries are episodes of a series (\"Ep 4-6\"). Grouped, they show as one series with its episodes."
+    },
+    {
+      "key": "group",
+      "type": "toggle",
+      "label": "Agrupar capítulos en series",
+      "labelEn": "Group episodes into series",
+      "default": true
+    },
+    {
+      "key": "info",
+      "type": "status",
+      "label": "Estado",
+      "labelEn": "Status"
+    },
+    {
+      "key": "clearCache",
+      "type": "action",
+      "label": "Vaciar caché",
+      "labelEn": "Clear cache",
+      "confirm": "¿Vaciar la caché de listas?",
+      "confirmEn": "Clear the list cache?"
+    }
+  ]
 }

@@ -1,17 +1,27 @@
 // Kino plugin: Area Documental -- documentaries in Spanish from www.area-documental.com (about 2,000, many of them episodes of series).
-// The site lists them in pages of five (`/resultados*.php?buscar=<text>&page=<n>`, n from 0), each one opens a player page
-// (`/player.php?titulo=<title>`) whose JW Player names an MP4 (`/videoHD.php?playback=<token>`) and its subtitles. The MP4 is only
-// served to a request that carries the session cookie (PHPSESSID) the player page set, so resolve hands it to the player.
+// The site lists them in pages of five (`/resultados*.php?buscar=<text>&page=<n>`, n from 0, and `?genero=<topic>` for a topic), each
+// one opens a player page (`/player.php?titulo=<title>`) whose JW Player names an MP4 (`/videoHD.php?playback=<token>`) and its
+// subtitles. The MP4 is only served to a request that carries the session cookie (PHPSESSID) the player page set, so resolve hands it
+// to the player. Episodes of a series ("<name> Temporada 2 Ep 4-6") are grouped into one series item, listed by /resultados-serie.php.
 
 const SITE = "https://www.area-documental.com";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const PAGE_SIZE = 5;
 const HOME_PAGES = 3;
 const CACHE_MS = 10 * 60 * 1000;
+const MAX_SERIES_PAGES = 8;
 
 const TEXTS = {
-  es: { recent: "Recientes", popular: "Más vistos", byYear: "Por año", alpha: "De la A a la Z", unavailable: "El servicio no está disponible en este momento.", noVideo: "No se encontró el video de este documental.", noCookie: "El sitio no abrió la sesión del video. Prueba de nuevo." },
-  en: { recent: "Recent", popular: "Most watched", byYear: "By year", alpha: "A to Z", unavailable: "The service is not available right now.", noVideo: "The video of this documentary was not found.", noCookie: "The site did not open the video's session. Try again." },
+  es: {
+    recent: "Recientes", popular: "Más vistos", byYear: "Por año", alpha: "De la A a la Z", news: "Novedades", topics: "Temas", series: "Serie", heroText: "Documentales en español, con subtítulos.",
+    unavailable: "El servicio no está disponible en este momento.", noVideo: "No se encontró el video de este documental.", noCookie: "El sitio no abrió la sesión del video. Prueba de nuevo.", noEpisodes: "No se encontraron capítulos de esta serie.",
+    statusLine: "Listas guardadas: {n}", cacheCleared: "Caché vaciada.", episode: "Ep",
+  },
+  en: {
+    recent: "Recent", popular: "Most watched", byYear: "By year", alpha: "A to Z", news: "What's new", topics: "Topics", series: "Series", heroText: "Documentaries in Spanish, with subtitles.",
+    unavailable: "The service is not available right now.", noVideo: "The video of this documentary was not found.", noCookie: "The site did not open the video's session. Try again.", noEpisodes: "No episodes found for this series.",
+    statusLine: "Lists kept: {n}", cacheCleared: "Cache cleared.", episode: "Ep",
+  },
 };
 const t = (key) => {
   const lang = String(kino.lang || "").toLowerCase().startsWith("es") ? "es" : "en";
@@ -26,11 +36,20 @@ const LISTS = {
   titulo: { path: "/resultados-titulo.php", key: "alpha" },
 };
 
+/** The topics of the site's menu that Categorías and the section offer (the site has 63; Kino shows at most 24 tiles): [site value, title]. */
+const TOPICS = [
+  ["Historia", "Historia"], ["Ciencia", "Ciencia"], ["Naturaleza", "Naturaleza"], ["Arte", "Arte"], ["Cultura", "Cultura"], ["Tecnologia", "Tecnología"],
+  ["Medicina", "Medicina"], ["Salud", "Salud"], ["Biografias", "Biografías"], ["Arqueologia", "Arqueología"], ["Astronomia", "Astronomía"], ["Biologia", "Biología"],
+  ["Economia", "Economía"], ["Politica", "Política"], ["Deportes", "Deportes"], ["Musica", "Música"], ["Cinematografia", "Cinematografía"], ["Vida salvaje", "Vida salvaje"],
+  ["Belica", "Bélica"], ["Ecosistemas", "Ecosistemas"], ["El Universo", "El Universo"], ["Religiones", "Religiones"], ["Antropologia y sociologia", "Antropología y sociología"], ["Actualidad", "Actualidad"],
+];
+
 // ---- parsing ---------------------------------------------------------------------------------------------------
 
 const decode = (s) => String(s || "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&#0?39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
 const strip = (s) => decode(String(s || "").replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
 const abs = (u) => { try { return new URL(decode(u), SITE + "/").href; } catch (_) { return undefined; } };
+const plus = (s) => encodeURIComponent(s).replace(/%20/g, "+").replace(/%3A/gi, ":");
 
 /** The `titulo` a player address carries ("La+ultima+gran+escalada:+el+K2" -> "La ultima gran escalada: el K2"), or null. */
 function tituloOf(href) {
@@ -40,7 +59,7 @@ function tituloOf(href) {
 }
 
 /** The player address of a title, spelled the way the site spells it (spaces as "+"). */
-const playerUrl = (titulo) => `${SITE}/player.php?titulo=${encodeURIComponent(titulo).replace(/%20/g, "+").replace(/%3A/gi, ":")}`;
+const playerUrl = (titulo) => `${SITE}/player.php?titulo=${plus(titulo)}`;
 
 /** The entries of a results page: `{ titulo, title, poster, year, genre, quality, overview }`. */
 function parseResults(html) {
@@ -67,17 +86,52 @@ function parseResults(html) {
 
 const fold = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const hash36 = (s) => { let h = 5381; for (const ch of String(s)) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0; return h.toString(36); };
-/** An item id Kino accepts (letters, digits and . _ ~ - only): the title as a slug plus a short hash so two titles never share one. */
-const idOf = (titulo) => "ad-" + (fold(titulo).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "doc") + "-" + hash36(titulo);
+/** An item id Kino accepts (letters, digits and . _ ~ - only): the text as a slug plus a short hash so two never share one. */
+const idOf = (prefix, text) => prefix + (fold(text).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "doc") + "-" + hash36(text);
 
-function toItem(e) {
-  const item = { id: idOf(e.titulo), ref: "p:" + encodeURIComponent(e.titulo), title: e.title, kind: "movie", genres: ["Documental"] };
+/** The series a title belongs to: "Vikingos Temporada 2 Ep 9-10" -> "Vikingos Temporada 2"; null when it is not an episode. */
+function seriesOf(title) {
+  const m = /^(.+?)\s+Ep\.?\s*\d+(?:\s*[-–]\s*\d+)?\s*$/i.exec(String(title || "").trim());
+  return m && m[1].trim().length >= 2 ? m[1].trim() : null;
+}
+
+/** Should episodes be grouped into series? On unless the person turned it off in Ajustes. */
+function grouping() {
+  try { return kino.config.get("group") !== false; } catch (_) { return true; }
+}
+
+function movieItem(e) {
+  const item = { id: idOf("ad-", e.titulo), ref: "p:" + encodeURIComponent(e.titulo), title: e.title, kind: "movie", genres: ["Documental"] };
   if (e.poster) item.poster = e.poster;
   if (e.year) item.year = e.year;
   if (e.overview) item.overview = e.overview;
   if (e.genre && !/^documental(es)?$/i.test(e.genre)) item.genres = [e.genre, "Documental"];
   if (e.quality) item.badges = [e.quality.toUpperCase()];
   return item;
+}
+
+function seriesItem(name, e) {
+  const item = { id: idOf("as-", name), ref: "s:" + encodeURIComponent(name), title: name, kind: "series", genres: ["Documental"], badges: [t("series")] };
+  if (e.poster) item.poster = e.poster;
+  if (e.year) item.year = e.year;
+  if (e.overview) item.overview = e.overview;
+  if (e.genre && !/^documental(es)?$/i.test(e.genre)) item.genres = [e.genre, "Documental"];
+  return item;
+}
+
+/** Items of a results page: an episode becomes (once) the series it belongs to, anything else a movie. */
+function toItems(entries) {
+  const group = grouping();
+  const out = [];
+  const seen = new Set();
+  for (const e of entries) {
+    const name = group ? seriesOf(e.title) : null;
+    if (!name) { out.push(movieItem(e)); continue; }
+    if (seen.has(name)) continue;
+    seen.add(name);
+    out.push(seriesItem(name, e));
+  }
+  return out;
 }
 
 // ---- fetching --------------------------------------------------------------------------------------------------
@@ -99,40 +153,141 @@ async function cached(key, fn) {
   return v;
 }
 
-/** One page of a listing (n from 0). */
-function listPage(list, n, query) {
+/** A listing a browse ref names: "list:<name>" or "genre:<site topic>", with the path and query the site wants; null for anything else. */
+function listingOf(ref) {
+  const m = /^(list|genre):(.+)$/.exec(String(ref || ""));
+  if (!m) return null;
+  if (m[1] === "list") return LISTS[m[2]] ? { path: LISTS[m[2]].path, title: t(LISTS[m[2]].key), name: m[2] } : null;
+  const topic = TOPICS.find(([value]) => value === m[2]);
+  return topic ? { path: "/resultados.php", genero: topic[0], title: topic[1], name: "genre-" + topic[0] } : null;
+}
+
+/** One page of a listing (n from 0), as entries; `query` narrows it with the site's own search. */
+function listPage(def, n, query) {
   const q = query ? encodeURIComponent(query) : "";
-  const url = `${SITE}${list.path}?buscar=${q}${n > 0 ? "&page=" + n : ""}`;
-  return cached(`${list.path}:${q}:${n}`, async () => parseResults(await getText(url)).map(toItem));
+  const g = def.genero ? `genero=${plus(def.genero)}&` : "";
+  const url = `${SITE}${def.path}?${g}buscar=${q}${n > 0 ? "&page=" + n : ""}`;
+  return cached(`${def.path}:${def.genero || ""}:${q}:${n}`, async () => parseResults(await getText(url)));
+}
+
+async function pagesOf(def, from, count, query) {
+  return (await Promise.all(Array.from({ length: count }, (_, i) => listPage(def, from + i, query).catch(() => [])))).flat();
 }
 
 // ---- exports ---------------------------------------------------------------------------------------------------
 
+const safeRow = async (id, fn) => { try { return await fn(); } catch (e) { kino.log("row " + id + ": " + (e && e.message)); return null; } };
+
+/** A Home or section row: three pages of a listing, with its "Ver más". */
+async function rowOf(id, ref) {
+  const def = listingOf(ref);
+  const items = toItems(await pagesOf(def, 0, HOME_PAGES));
+  return items.length ? { id, title: def.title, items, ref, genre: "documentales" } : null;
+}
+
 export async function home() {
-  const rows = await Promise.all(Object.entries(LISTS).map(async ([id, list]) => {
-    try {
-      const pages = await Promise.all(Array.from({ length: HOME_PAGES }, (_, n) => listPage(list, n)));
-      const items = pages.flat();
-      return items.length ? { id, title: t(list.key), items, ref: "list:" + id, genre: "documentales" } : null;
-    } catch (e) { kino.log("row " + id + ": " + (e && e.message)); return null; }
-  }));
-  return rows.filter(Boolean);
+  const ids = Object.keys(LISTS);
+  return (await Promise.all(ids.map((id) => safeRow(id, () => rowOf(id, "list:" + id))))).filter(Boolean);
 }
 
 export async function browse(ref, cursor) {
-  const m = /^list:(recientes|vistos|anio|titulo)$/.exec(String(ref || ""));
-  if (!m) return { items: [] };
+  const def = listingOf(ref);
+  if (!def) return { items: [] };
   const n = cursor ? Math.max(0, parseInt(cursor, 10) || 0) : HOME_PAGES;
-  const items = await listPage(LISTS[m[1]], n);
-  return { items, next: items.length >= PAGE_SIZE ? String(n + 1) : undefined };
+  const entries = await listPage(def, n);
+  return { items: toItems(entries), next: entries.length >= PAGE_SIZE ? String(n + 1) : undefined };
 }
 
+/**
+ * The plain search (the site's, over everything) or, with `within`, the same search restricted to the "Ver más" page it was made on:
+ * a topic (`genero=` plus the text) or a sorted list (the list's own page plus the text).
+ */
 export async function search(arg) {
-  const q = String(typeof arg === "string" ? arg : (arg && arg.q) || "").trim();
+  const query = typeof arg === "string" ? { q: arg } : (arg || {});
+  const q = String(query.q || "").trim();
   if (q.length < 2) return [];
-  const pages = await Promise.all([0, 1].map((n) => listPage({ path: "/resultados.php" }, n, q).catch(() => [])));
-  return pages.flat();
+  let def = { path: "/resultados.php" };
+  if (query.within) {
+    def = listingOf(query.within);
+    if (!def) return null; // Kino filters the page it already has
+  }
+  const n = query.cursor ? Math.max(0, parseInt(query.cursor, 10) || 0) : 0;
+  const entries = await pagesOf(def, n, query.within ? 1 : 2, q);
+  const items = toItems(entries);
+  if (!query.within) return items;
+  return { items, next: entries.length >= PAGE_SIZE ? String(n + 1) : undefined };
 }
+
+// ---- section, categories ---------------------------------------------------------------------------------------
+
+const TAB_DEFS = () => [
+  { id: "novedades", label: t("news") },
+  { id: "temas", label: t("topics") },
+  { id: "anio", label: t("byYear") },
+  { id: "titulo", label: t("alpha") },
+];
+
+function heroOf(rows) {
+  const first = rows.flatMap((r) => r.items).find((i) => i.poster && i.overview) || rows.flatMap((r) => r.items)[0];
+  if (!first) return undefined;
+  const hero = { title: first.title, text: String(first.overview || t("heroText")).slice(0, 300) };
+  if (first.poster) hero.image = first.poster;
+  return hero;
+}
+
+export async function section({ tab } = {}) {
+  const tabs = TAB_DEFS();
+  const chosen = tabs.some((x) => x.id === tab) ? tab : "novedades";
+  let ids = [];
+  if (chosen === "novedades") ids = [["recientes", "list:recientes"], ["vistos", "list:vistos"]];
+  else if (chosen === "anio") ids = [["anio", "list:anio"]];
+  else if (chosen === "titulo") ids = [["titulo", "list:titulo"]];
+  else ids = TOPICS.slice(0, 6).map(([value]) => ["genre-" + value, "genre:" + value]);
+  const rows = (await Promise.all(ids.map(([id, ref]) => safeRow(id, () => rowOf(id, ref))))).filter(Boolean);
+  const answer = { tabs, tab: chosen, rows };
+  const hero = heroOf(rows);
+  if (hero) answer.hero = hero;
+  return answer;
+}
+
+export async function categories() {
+  return TOPICS.map(([value, title]) => ({ id: "g-" + hash36(value), title, ref: "genre:" + value }));
+}
+
+// ---- a series: its episodes ------------------------------------------------------------------------------------
+
+export async function episodes(ref) {
+  const m = /^s:(.+)$/.exec(String(ref || ""));
+  let name = null;
+  try { name = m && decodeURIComponent(m[1]); } catch (_) { name = null; }
+  if (!name) throw kino.error("not_found", "unknown ref: " + ref);
+  const entries = [];
+  for (let n = 0; n < MAX_SERIES_PAGES; n++) {
+    const page = await cached(`serie:${name}:${n}`, async () => parseResults(await getText(`${SITE}/resultados-serie.php?buscar=${plus(name)}${n > 0 ? "&page=" + n : ""}`)));
+    entries.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+  if (!entries.length) throw kino.error("not_found", "no episodes for " + name, { userMessage: t("noEpisodes") });
+  const season = Number((/Temporada\s*(\d+)/i.exec(name) || [])[1] || 1);
+  const first = entries[0];
+  const seen = new Set();
+  const eps = entries.map((e, i) => {
+    const label = (/\bEp\.?\s*(\d+(?:\s*[-–]\s*\d+)?)\s*$/i.exec(e.title) || [])[1];
+    const number = label ? Number(label.split(/[-–]/)[0]) : i + 1;
+    const ep = { season, number, ref: "p:" + encodeURIComponent(e.titulo), title: label ? `${t("episode")} ${label.replace(/\s+/g, "")}` : e.title };
+    if (e.poster) ep.still = e.poster;
+    if (e.overview) ep.overview = e.overview;
+    return ep;
+  }).filter((e) => { const k = e.season + ":" + e.number; if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => a.number - b.number);
+  const series = { title: name, genres: ["Documental"] };
+  if (first.poster) series.poster = first.poster;
+  if (first.year) series.year = first.year;
+  if (first.overview) series.overview = first.overview;
+  if (first.genre && !/^documental(es)?$/i.test(first.genre)) series.genres = [first.genre, "Documental"];
+  return { series, episodes: eps };
+}
+
+// ---- a documentary's own page: details and resolve -------------------------------------------------------------
 
 /** `"HD"`-labelled MP4 first; every other `file` of the player's playlist after it. */
 function parseSources(html) {
@@ -174,13 +329,41 @@ function parseDuration(html) {
   return hms ? ((Number(hms[1] || 0) * 60 + Number(hms[2])) * 60 + Number(hms[3])) * 1000 || null : null;
 }
 
-export async function resolve(ref) {
+function tituloFromRef(ref) {
   const m = /^p:(.+)$/.exec(String(ref || ""));
-  let titulo = null;
-  try { titulo = m && decodeURIComponent(m[1]); } catch (_) { titulo = null; }
+  try { return m ? decodeURIComponent(m[1]) : null; } catch (_) { return null; }
+}
+
+/** A documentary's player page; the page a person opens is the one they usually play, so the last few are kept for the next call. */
+const pageCache = new Map();
+async function playerPage(titulo) {
+  if (pageCache.has(titulo)) return pageCache.get(titulo);
+  const html = await getText(playerUrl(titulo), { Referer: SITE + "/" });
+  if (pageCache.size >= 4) pageCache.delete(pageCache.keys().next().value);
+  pageCache.set(titulo, html);
+  return html;
+}
+
+/** What a documentary's page says about it: synopsis, year, topic, length and its cover. */
+export async function details(ref) {
+  const titulo = tituloFromRef(ref);
+  if (!titulo) return null;
+  const html = await playerPage(titulo);
+  const meta = (name) => decode((new RegExp(`itemprop=["']${name}["'][^>]*content=["']([^"']*)["']`).exec(html) || [])[1] || "");
+  const overview = strip((/<div class="comments"[^>]*>([\s\S]*?)<\/div>/.exec(html) || [])[1]);
+  const year = (/^((?:19|20)\d{2})/.exec(meta("dateCreated")) || [])[1];
+  const ms = parseDuration(html);
+  const out = { overview: overview || undefined, year, runtimeMinutes: ms ? Math.round(ms / 60000) : undefined, genres: ["Documental"] };
+  for (const k of Object.keys(out)) if (out[k] === undefined) delete out[k];
+  return out;
+}
+
+export async function resolve(ref) {
+  const titulo = tituloFromRef(ref);
   if (!titulo) throw kino.error("not_found", "unknown ref: " + ref);
 
-  const html = await getText(playerUrl(titulo), { Referer: SITE + "/" });
+  pageCache.delete(titulo); // the session cookie below must be the one this very page set
+  const html = await playerPage(titulo);
   const sources = parseSources(html);
   if (!sources.length) throw kino.error("not_found", "no playable file for " + titulo, { userMessage: t("noVideo") });
 
@@ -191,7 +374,7 @@ export async function resolve(ref) {
     kino.log("resolve " + titulo + ": no PHPSESSID after the player page");
     throw kino.error("unavailable", "no session cookie for " + titulo, { userMessage: t("noCookie") });
   }
-  const headers = { "User-Agent": UA, Referer: `${SITE}/video/${encodeURIComponent(titulo).replace(/%20/g, "+").replace(/%3A/gi, ":")}/`, Cookie: "PHPSESSID=" + sid };
+  const headers = { "User-Agent": UA, Referer: `${SITE}/video/${plus(titulo)}/`, Cookie: "PHPSESSID=" + sid };
 
   const [first, ...rest] = sources;
   const stream = { url: first.url, mime: "video/mp4", headers, label: first.label || "HD" };
@@ -199,6 +382,23 @@ export async function resolve(ref) {
   if (subtitles.length) stream.subtitles = subtitles;
   const durationMs = parseDuration(html);
   if (durationMs) stream.durationMs = durationMs;
-  if (rest.length) stream.alternatives = rest.map((s) => ({ url: s.url, mime: "video/mp4", headers, label: s.label || undefined })).map((a) => { if (!a.label) delete a.label; return a; });
+  if (rest.length) stream.alternatives = rest.map((s) => ({ url: s.url, mime: "video/mp4", headers, ...(s.label ? { label: s.label } : {}) }));
   return stream;
+}
+
+// ---- Ajustes ▸ Area Documental ---------------------------------------------------------------------------------
+
+export async function settingsStatus() {
+  let n = 0;
+  try { n = kino.storage.keys().filter((k) => k.startsWith("c:")).length; } catch (_) { /* no storage */ }
+  return { info: t("statusLine").replace("{n}", String(n)) };
+}
+
+export async function action(key) {
+  if (key === "clearCache") {
+    try { for (const k of kino.storage.keys()) if (k.startsWith("c:")) kino.storage.remove(k); } catch (_) { /* nothing to clear */ }
+    pageCache.clear();
+    return { message: t("cacheCleared") };
+  }
+  return { message: "" };
 }
