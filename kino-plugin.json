@@ -1,0 +1,25 @@
+{
+  "id": "area-documental",
+  "name": "Area Documental",
+  "version": "0.1.0",
+  "apiVersion": 6,
+  "entry": "plugin.js",
+  "icon": "icon.png",
+  "description": "Más de 2.000 documentales en español de area-documental.com: destacados, recientes y más vistos, con búsqueda y subtítulos.",
+  "author": "xuper-plugin",
+  "homepage": "https://github.com/xuper-plugin/kino-plugin-areadocumental",
+  "hosts": [
+    "www.area-documental.com",
+    "area-documental.com"
+  ],
+  "capabilities": [
+    "search",
+    "home",
+    "browse",
+    "resolve"
+  ],
+  "categories": [
+    "movies"
+  ],
+  "color": "#0EA5A4"
+}
