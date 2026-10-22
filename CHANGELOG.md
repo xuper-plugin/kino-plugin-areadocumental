@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- The description names the four rows that exist. The icon is the site's own logo.
+  / La descripción nombra las cuatro filas que existen. El icono es el logo del sitio.
+
 ## 0.1.0
 
 - First version: four Home rows (recent, most watched, by year, A to Z), search, and playback of the MP4 of each documentary with its
