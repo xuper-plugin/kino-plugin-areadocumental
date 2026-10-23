@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+
+- `telemetry` added: with the person's consent, failed calls send their log lines to Kino's error log.
+  / Se agrega `telemetry`: con permiso de la persona, las llamadas que fallan envían sus líneas al registro de errores de Kino.
+
 ## 0.2.0
 
 - Uses more of Kino's plugin API: a **section of its own** ("Documentales", tabs novedades, temas, por año and A–Z, and a hero with the

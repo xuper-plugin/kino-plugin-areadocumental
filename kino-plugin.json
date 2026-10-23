@@ -1,7 +1,7 @@
 {
   "id": "area-documental",
   "name": "Area Documental",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "apiVersion": 9,
   "entry": "plugin.js",
   "icon": "icon.png",
@@ -67,5 +67,6 @@
       "confirm": "¿Vaciar la caché de listas?",
       "confirmEn": "Clear the list cache?"
     }
-  ]
+  ],
+  "telemetry": true
 }
