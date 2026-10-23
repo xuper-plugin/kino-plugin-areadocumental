@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2
+
+- An empty answer is no longer kept in the cache for ten minutes (a throttled or hiccuping site left a search empty).
+  / Una respuesta vacía ya no se guarda diez minutos en la caché.
+
 ## 0.2.1
 
 - `telemetry` added: with the person's consent, failed calls send their log lines to Kino's error log.

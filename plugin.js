@@ -149,6 +149,7 @@ async function cached(key, fn) {
     if (e && Date.now() - e.at < CACHE_MS) return e.v;
   } catch (_) { /* no cache */ }
   const v = await fn();
+  if (Array.isArray(v) && !v.length) return v; // an empty answer may be a throttle or a hiccup: not kept
   try { kino.storage.set("c:" + key, JSON.stringify({ at: Date.now(), v }), { ttlMs: CACHE_MS }); } catch (_) { /* a full storage only costs a refetch */ }
   return v;
 }
