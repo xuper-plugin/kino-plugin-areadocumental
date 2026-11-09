@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3
+
+- Home and the section tabs answer with the rows that load inside 11 s instead of waiting for the slowest one (the Home was timing out on slow connections), and Kino drops the requests a call leaves running.
+  / El Home y las pestañas responden con las filas que cargan en 11 s en vez de esperar a la más lenta, y Kino descarta las peticiones que una llamada deja en curso.
+
 ## 0.2.2
 
 - An empty answer is no longer kept in the cache for ten minutes (a throttled or hiccuping site left a search empty).

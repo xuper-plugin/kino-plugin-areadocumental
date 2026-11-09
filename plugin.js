@@ -4,6 +4,9 @@
 // subtitles. The MP4 is only served to a request that carries the session cookie (PHPSESSID) the player page set, so resolve hands it
 // to the player. Episodes of a series ("<name> Temporada 2 Ep 4-6") are grouped into one series item, listed by /resultados-serie.php.
 
+// Kino waits for every request a call left running before it delivers the call's answer; ask it to drop them once the call settles.
+globalThis.__kinoDropPendingFetches = true;
+
 const SITE = "https://www.area-documental.com";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const PAGE_SIZE = 5;
@@ -186,9 +189,21 @@ async function rowOf(id, ref) {
   return items.length ? { id, title: def.title, items, ref, genre: "documentales" } : null;
 }
 
+const ROWS_BUDGET_MS = 11000;
+
+/** Runs the row jobs together and answers with the rows that finished inside the budget (a slow site no longer holds the whole Home past Kino's 20 s). */
+export async function rowsWithin(jobs, budgetMs = ROWS_BUDGET_MS) {
+  const out = jobs.map(() => null);
+  let done = false;
+  const all = Promise.all(jobs.map((job, i) => job().then((row) => { out[i] = row; }, () => {}))).then(() => { done = true; });
+  const end = Date.now() + budgetMs;
+  while (!done && Date.now() < end) await Promise.race([all, kino.sleep(Math.min(250, Math.max(1, end - Date.now())))]);
+  return out.filter(Boolean);
+}
+
 export async function home() {
   const ids = Object.keys(LISTS);
-  return (await Promise.all(ids.map((id) => safeRow(id, () => rowOf(id, "list:" + id))))).filter(Boolean);
+  return rowsWithin(ids.map((id) => () => safeRow(id, () => rowOf(id, "list:" + id))));
 }
 
 export async function browse(ref, cursor) {
@@ -244,7 +259,7 @@ export async function section({ tab } = {}) {
   else if (chosen === "anio") ids = [["anio", "list:anio"]];
   else if (chosen === "titulo") ids = [["titulo", "list:titulo"]];
   else ids = TOPICS.slice(0, 6).map(([value]) => ["genre-" + value, "genre:" + value]);
-  const rows = (await Promise.all(ids.map(([id, ref]) => safeRow(id, () => rowOf(id, ref))))).filter(Boolean);
+  const rows = await rowsWithin(ids.map(([id, ref]) => () => safeRow(id, () => rowOf(id, ref))));
   const answer = { tabs, tab: chosen, rows };
   const hero = heroOf(rows);
   if (hero) answer.hero = hero;
