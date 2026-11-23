@@ -1,7 +1,7 @@
 {
   "id": "area-documental",
   "name": "Area Documental",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "apiVersion": 9,
   "entry": "plugin.js",
   "icon": "icon.png",
@@ -12,6 +12,7 @@
     "www.area-documental.com",
     "area-documental.com"
   ],
+  "streamHosts": "any",
   "capabilities": [
     "search",
     "home",
