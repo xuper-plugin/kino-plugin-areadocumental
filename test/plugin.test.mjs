@@ -56,6 +56,7 @@ test("home: four rows, each three pages of five, ids Kino accepts, titles, year,
   }
   const rows = await plugin.home();
   assert.deepEqual(rows.map((r) => r.id), ["recientes", "vistos", "anio", "titulo"]);
+  assert.ok(rows.every((r) => r.genre === "documentales"), "every row is typed Documentales for Kino's Home by categories");
   assert.equal(rows[0].title, "Recientes");
   assert.equal(rows[0].items.length, 3 * 2 + 1, "per page two documentaries and one episode; the series of the episodes is one item for the three pages");
   const k2 = rows[0].items[0];
