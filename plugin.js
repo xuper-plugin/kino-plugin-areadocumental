@@ -266,8 +266,42 @@ export async function section({ tab } = {}) {
   return answer;
 }
 
+// ---- categories: a picture for every tile ----
+
+/**
+ * One picture per topic tile: a well-known title of it, as its TMDB backdrop at w780, each checked with a request (200, image/jpeg). Static on purpose: no extra request at runtime. Keys are the site's topic values (TOPICS); a topic not listed gets no art.
+ * Kino draws a tile's picture from `art` (any public https image).
+ */
+const TM = "https://image.tmdb.org/t/p/w780";
+const TILE_ART = {
+  Ciencia: TM + "/2Nwbv0hrN8sThLvgooShcPqmFrO.jpg",
+  Naturaleza: TM + "/rsQDFOcMvmX93MNot0bwLaRi9hK.jpg",
+  Arte: TM + "/uY0D6sVLjqCgLJW0ytc5EKyJvoX.jpg",
+  Cultura: TM + "/nr3Tiis14Cha1XFZiF7lOb7R2KX.jpg",
+  Tecnologia: TM + "/iYqoT9VBGdGTuLl3cjfbG7ZXDkP.jpg",
+  Medicina: TM + "/9sTIxPFsjdcMjI1GdfC9JyQ4rTw.jpg",
+  Salud: TM + "/f589RGsnKpDvHu9qvELM6LZBEbG.jpg",
+  Biografias: TM + "/vtXCGAkCx5o2p0jn3A1QmdR5u5i.jpg",
+  Arqueologia: TM + "/gHMifsvnNIVAHlEDzPpcXiI1mHm.jpg",
+  Astronomia: TM + "/cZsMCIlXegPjUwZbkDubRhP6Bfc.jpg",
+  Biologia: TM + "/gJZ20Zn9UmZA4NZHd9JQMJ6spPP.jpg",
+  Economia: TM + "/1yFmxvVYgVrFKL2ksFzgX0MrWOM.jpg",
+  Politica: TM + "/dFFdQgTtvL2X02xuGpDwn6SqFiL.jpg",
+  Deportes: TM + "/kY0h95L73t7a6ev6Rv0aHSCtN7y.jpg",
+  Musica: TM + "/y5Y12Pds6Z4ipLg482Azhp4xb9x.jpg",
+  Cinematografia: TM + "/xfC6hsmcsnf2MY1iXDs56gJNfQZ.jpg",
+  "Vida salvaje": TM + "/p8EUX6MPSNLxVwqO3fCYTi896Ro.jpg",
+  Belica: TM + "/94PXfCDB6TrTx1YwuUjzIpVXT2i.jpg",
+  Ecosistemas: TM + "/1nfIEJu02Zhv9omTKkzwHnK8Dji.jpg",
+  "El Universo": TM + "/g5wYfLnPouMa2uAwk9SyxHqZ2VS.jpg",
+  Religiones: TM + "/7pnGtMK5JYlXUQ2gwKORnX6sap1.jpg",
+  "Antropologia y sociologia": TM + "/dDvOWXKQTAn6Fa1ALaGJGBWZKrk.jpg",
+  Actualidad: TM + "/4Nx3XAGPwv5AfdrSq9LFDEACl3T.jpg",
+};
+const withArt = (tile, art) => (art ? { ...tile, art } : tile);
+
 export async function categories() {
-  return TOPICS.map(([value, title]) => ({ id: "g-" + hash36(value), title, ref: "genre:" + value }));
+  return TOPICS.map(([value, title]) => withArt({ id: "g-" + hash36(value), title, ref: "genre:" + value }, TILE_ART[value]));
 }
 
 // ---- a series: its episodes ------------------------------------------------------------------------------------

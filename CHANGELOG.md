@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.6
+
+- Categorías: every topic tile now shows a picture (a famous documentary of the topic, static, no extra requests)
+
 ## 0.2.3
 
 - Home and the section tabs answer with the rows that load inside 11 s instead of waiting for the slowest one (the Home was timing out on slow connections), and Kino drops the requests a call leaves running.

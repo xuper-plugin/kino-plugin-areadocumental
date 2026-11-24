@@ -245,3 +245,10 @@ test("settings: the status line counts the lists kept and the action clears them
   assert.equal((await plugin.action("clearCache")).message, "Cache cleared.");
   assert.match((await plugin.settingsStatus()).info, /kept: 0/);
 });
+
+test("categories: every topic tile has a static https TMDB art picture, except Historia (no suitable backdrop)", async () => {
+  const c = await plugin.categories();
+  assert.deepEqual(c.filter((x) => !x.art).map((x) => x.title), ["Historia"]);
+  for (const x of c.filter((y) => y.art)) assert.match(x.art, /^https:\/\/image\.tmdb\.org\/t\/p\/w780\/[A-Za-z0-9]+\.jpg$/, x.id);
+  assert.equal(new Set(c.filter((x) => x.art).map((x) => x.art)).size, 23);
+});
