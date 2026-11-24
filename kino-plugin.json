@@ -1,7 +1,7 @@
 {
   "id": "area-documental",
   "name": "Area Documental",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "apiVersion": 9,
   "entry": "plugin.js",
   "icon": "icon.png",
@@ -69,5 +69,36 @@
       "confirmEn": "Clear the list cache?"
     }
   ],
-  "telemetry": true
+  "telemetry": true,
+  "enhancements": {
+    "20": {
+      "provides": {
+        "catalog": {
+          "summary": "Titles this plugin finds, for the author's other plugins",
+          "calls": {
+            "search": {
+              "in": {
+                "q": "string",
+                "type": "string?"
+              },
+              "out": "Item[]"
+            }
+          },
+          "types": {
+            "Item": {
+              "id": "string",
+              "ref": "string",
+              "title": "string",
+              "kind": "string",
+              "poster": "string?",
+              "backdrop": "string?",
+              "year": "string?",
+              "overview": "string?",
+              "tmdb": "number?"
+            }
+          }
+        }
+      }
+    }
+  }
 }
